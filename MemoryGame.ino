@@ -40,8 +40,9 @@ bool buttonDown = false; // Heeft de gebruiker een knop ingedrukt (wordt gebruik
 long inputTime = 0; // Houdt bij hoelang de speler over een "move" doet
 int inputIndex = 0; // Houdt bij aan welke knop de speler zit in het memory spel
 
-int rgbValues[] = {0, 0, 0}; // Houdt de waarden van de status led bij terwijl de speler wacht
-int rgbIndex = 0;            // Houdt bij waar we in de kleurenovergang zitten
+int rgbValues[] = {0, 0, 0};                             // Houdt de waarden van de status led bij terwijl de speler wacht
+const int rgbCombinations[][] = {{1, 0}, {0, 2}, {2, 1}} // De mogelijke kleurovergangen
+int rgbIndex = 0;                                        // Houdt bij waar we in de kleurenovergang zitten
 
 LinkedList<int> memory = LinkedList<int>(); // Houdt de huidige combinatie van knoppen bij
 
@@ -340,10 +341,14 @@ void sendData(String data)
 ///
 void cycleColours()
 {
-    if (rgbValues[rgbIndex] + FADE_INTERVAL >= 255) // Als de huidige kleur "volledig" is
+    int fromColour = rgbCombinations[rgbIndex][0];
+    int toColour = rgbCombinations[rgbIndex][1];
+
+    if (rgbValues[toColour] + FADE_INTERVAL >= 255 || rgbValues[fromColour] - FADE_INTERVAL <= 0) // Als de huidige kleur "volledig" is
     {
-        rgbValues[rgbIndex] = 0; // Reset de huidige kleur
-        rgbIndex++;              // We gaan over naar de volgende kleur
+        rgbValues[toColour] = 255; // Reset de huidige bestemming kleur
+        rgbValues[fromColour] = 0; // Reset de huidige oorspronkelijke kleur
+        rgbIndex++;                // We gaan over naar de volgende kleur
 
         if (rgbIndex >= 3) // We beginnen terug bij de eerste kleur
             rgbIndex = 0;
@@ -351,7 +356,8 @@ void cycleColours()
         return;
     }
 
-    rgbValues[rgbIndex] += FADE_INTERVAL;
+    rgbValues[toColour] += FADE_INTERVAL;
+    rgbValues[fromColour] -= FADE_INTERVAL;
 }
 
 ///

@@ -15,6 +15,8 @@ const int PLAYER_WAIT_TIME = 2000; // De maximale tijd die een speler heeft om e
 const int DISPLAY_TIME = 300;      // De tijd waarvoor we de combinatie-eenheden aan de gebruiker tonen
 const int DATA_TIME = 5;           // De tijd die men wacht bij het versturen/ontvangen van data
 
+const int FADE_INTERVAL = 20; // Hoe snel de status-led zijn kleurenovergang effect doet
+
 const String SYNC_STRING = "101";  // De string die gebruikt wordt om de twee controllers te "syncen"
 const String LOST_STATUS = "1100"; // De string die gebruikt wordt om aan te geven dat deze speler verloren is
 const String KNOP_DATA[] = {"1000", "1001", "1010", "1011"};
@@ -37,6 +39,9 @@ bool buttonDown = false; // Heeft de gebruiker een knop ingedrukt (wordt gebruik
 
 long inputTime = 0; // Houdt bij hoelang de speler over een "move" doet
 int inputIndex = 0; // Houdt bij aan welke knop de speler zit in het memory spel
+
+int rgbValues[] = {0, 0, 0}; // Houdt de waarden van de status led bij terwijl de speler wacht
+int rgbIndex = 0;            // Houdt bij waar we in de kleurenovergang zitten
 
 LinkedList<int> memory = LinkedList<int>(); // Houdt de huidige combinatie van knoppen bij
 
@@ -177,6 +182,15 @@ void LoseGame()
 
     // Verstuur het verlies over de datalijn
     sendData(LOST_STATUS);
+
+    while (true) // Flikker de rode led
+    {
+        setColor(255, 0, 0);
+        delay(2 * DISPLAY_TIME);
+        setColor(0, 0, 0);
+        delay(DISPLAY_TIME);
+        // playLostTune(); // Speel een verliezingstoontje
+    }
 }
 
 ///
@@ -229,6 +243,7 @@ void synchroniseControllersToRead()
             delay(2 * WAIT_TIME);       // Wacht een vaste tijd
             digitalWrite(TX_PIN, LOW);  // Reset de TX pin
             inSync = true;              // We zijn in sync, klaar om te ontvangen
+            return;
         }
 
         delay(WAIT_TIME);
@@ -270,6 +285,7 @@ void synchroniseControllersToWrite()
         {
             delay(WAIT_TIME); // Wacht de andere helft van de tijd
             inSync = true;
+            return;
         }
         else
         {
@@ -285,7 +301,7 @@ void synchroniseControllersToWrite()
 String receiveData()
 {
     // Eerst synchroniseren we de controllers
-    synchoniseControllersToRead();
+    synchroniseControllersToRead();
 
     Serial.println("Klaar om te ontvangen...");
     String data = "";
@@ -307,7 +323,7 @@ String receiveData()
 void sendData(String data)
 {
     // Eerst synchroniseren we de controllers
-    synchoniseControllersToWrite();
+    synchroniseControllersToWrite();
 
     Serial.println("Klaar om te versturen...");
     for (int i = 0; i < PACKET_SIZE; i++) // We versturen de boodschap, bit voor bit
@@ -317,6 +333,34 @@ void sendData(String data)
         delay(DATA_TIME);
     }
     Serial.println("Boodschap verstuurd: " + data);
+}
+
+///
+/// Regenboogeffect op de status-led
+///
+void cycleColours()
+{
+    if (rgbValues[rgbIndex] + FADE_INTERVAL >= 255) // Als de huidige kleur "volledig" is
+    {
+        rgbValues[rgbIndex] = 0; // Reset de huidige kleur
+        rgbIndex++;              // We gaan over naar de volgende kleur
+
+        if (rgbIndex >= 3) // We beginnen terug bij de eerste kleur
+            rgbIndex = 0;
+
+        return;
+    }
+
+    rgbValues[rgbIndex] += FADE_INTERVAL;
+}
+
+///
+/// Reset de status-led omdat de speler weer aan de beurt is
+///
+void resetColours()
+{
+    rgbIndex = 0;
+    rgbValues = {0, 0, 0};
 }
 
 void setup() // Loopt alleen bij start
@@ -426,6 +470,7 @@ void loop()
     {
         while (getRX() == LOW) // Wacht tot de pin hoog gestuurd wordt
         {
+            cycleColours(); // Regenboogeffect op de status-led terwijl de speler wacht
             delay(WAIT_TIME / 2);
         }
 
@@ -438,6 +483,7 @@ void loop()
                 delay(2 * DISPLAY_TIME);
                 setColor(0, 0, 0);
                 delay(DISPLAY_TIME);
+                // playWinTune(); // Speel een overwinningstoontje
             }
         }
 
@@ -454,5 +500,7 @@ void loop()
         memory.add(knop); // Reset de variabelen
         mijnBeurt = true;
         inputIndex = 0;
+
+        resetColours(); // Reset de status-led
     }
 }

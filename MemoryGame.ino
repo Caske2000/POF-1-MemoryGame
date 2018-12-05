@@ -5,17 +5,28 @@
 const int KNOPPEN[] = {2, 3, 4, 5}; // Dit zijn de pinnen die verbonden zijn met de KNOPPEN
 const int LEDS[] = {6, 7, 8, 9};    // Dit zijn de pinnen die verbonden zijn met de LEDS
 const int BUZZER_PIN = 10;          // Buzzer pin, geeft speler feedback tijdens het spel
-const int DATA_PIN = 8;             // De pin waarover de data verstuurd zal worden
+const int TX_PIN = 2;               // De pin waarover de data verstuurd zal worden
+const int RX_PIN = 3;               // De pin waarover de data ontvangen zal worden
 const int RGB_PIN[] = {10, 11, 12}; // De drie outputs verbonden met de RBG status-led
 
 // Constants
-const int SLEEP_TIME = 50;         // De tijd die een controller wacht om input te lezen
 const int WAIT_TIME = 50;          // De tijd die een controller wacht om data te beginnen lezen/sturen
 const int PLAYER_WAIT_TIME = 2000; // De maximale tijd die een speler heeft om een "move" te doen (in ms)
 const int DISPLAY_TIME = 300;      // De tijd waarvoor we de combinatie-eenheden aan de gebruiker tonen
+const int DATA_TIME = 5;           // De tijd die men wacht bij het versturen/ontvangen van data
 
-const String SYNC_STRING = "101";   // De string die gebruikt wordt om de twee controllers te "syncen"
-const String LOST_STATUS = "11101"; // De string die gebruikt wordt om aan te geven dat deze speler verloren is
+const String SYNC_STRING = "101";  // De string die gebruikt wordt om de twee controllers te "syncen"
+const String LOST_STATUS = "1100"; // De string die gebruikt wordt om aan te geven dat deze speler verloren is
+const String KNOP_DATA[] = {"1000", "1001", "1010", "1011"};
+const int PACKET_SIZE = 4;
+/*
+* 1000 ==> knop 0
+* 1001 ==> knop 1
+* 1010 ==> knop 2
+* 1011 ==> knop 3
+* 1100 ==> verloren
+*
+*/
 
 // Spelvariabelen
 bool mijnBeurt = true; // Een van de twee spelers moet beginnen, de speler die tijdens het opstarten knop 1 ingedrukt heeft, begint
@@ -78,34 +89,6 @@ void toonCombinatie()
 ///
 void toonWacht()
 {
-}
-
-void setup() // Loopt alleen bij start
-{
-    memory.add(0); // Initialiseer het spel met een beginwaarde (Dit wordt uiteindelijk de waarde van de ingedrukte startknop)
-
-    // Initialiseer de KNOPPEN en LEDS
-    for (int i = 0; i < 4; i++)
-    {
-        pinMode(KNOPPEN[i], INPUT);
-        if (digitalRead(KNOPPEN[i]) == HIGH)
-        {
-            mijnBeurt = true;
-        }
-    }
-
-    for (int i = 0; i < 4; i++)
-    {
-        pinMode(LEDS[i], OUTPUT);
-    }
-
-    // Initialiseer de status-led outputs
-    pinMode(RGB_PIN[0], OUTPUT);
-    pinMode(RGB_PIN[1], OUTPUT);
-    pinMode(RGB_PIN[2], OUTPUT);
-
-    // Begin de seriële comunicatie
-    Serial.begin(9600);
 }
 
 ///
@@ -193,7 +176,173 @@ void LoseGame()
     mijnBeurt = false;
 
     // Verstuur het verlies over de datalijn
-    // SendLostStatus();
+    sendData(LOST_STATUS);
+}
+
+///
+/// Vermits de RX ge-inverteerd wordt, moeten we deze waarde terug omkeren
+///
+int getRX()
+{
+    return !digitalRead(RX_PIN);
+}
+
+///
+/// Leest de synchronisatie-sequentie en checkt of deze juist is
+///
+bool readSyncSequence()
+{
+    for (int i = 0; i <= SYNC_STRING.length(); i++)
+    {
+        String rx = String(!getRX());            // Het tegenovergestelde van wat we ontvangen
+        if (String(SYNC_STRING.charAt(i)) == rx) // Als we het foute ontvangen, is de synchronisatie mislukt
+        {
+            Serial.println("synchronisatie mislukt, we proberen opnieuw...");
+            return false;
+        }
+        Serial.println("synchronisatie voltooid!");
+        delay(DATA_TIME);
+    }
+    return true;
+}
+
+///
+/// Maakt de controller klaar om data te lezen
+///
+void synchroniseControllersToRead()
+{
+    bool inSync = false;
+
+    while (!inSync) // Herhaal dit zolang we niet in sync zijn
+    {
+        Serial.println("Begin de synchronisatie...");
+        
+        while (getRX() == HIGH) // Wacht tot de pin terug laag is om te syncen
+        {
+            delay(1);
+        }
+
+        delay(WAIT_TIME);       // Als er HOOG gestuurd wordt, wacht dat tot het terug laag is, en wacht daarna een vaste tijd
+        if (readSyncSequence()) // Dit checkt of de data die aangekomen is, de "Sync sequentie" is, indien ja, zijn we in sync
+        {
+            digitalWrite(TX_PIN, HIGH); // Antwoord OK, de data is in sync
+            delay(2 * WAIT_TIME);       // Wacht een vaste tijd
+            digitalWrite(TX_PIN, LOW);  // Reset de TX pin
+            inSync = true;              // We zijn in sync, klaar om te ontvangen
+        }
+    }
+}
+
+///
+/// Maakt de controller klaar om data te versturen
+///
+void synchroniseControllersToWrite()
+{
+    bool inSync = false;
+
+    while (!inSync) // Herhaal dit zolang we niet in sync zijn
+    {
+        Serial.println("Begin de synchronisatie...");
+        digitalWrite(TX_PIN, HIGH); // Kondig aan de we gaan versturen
+        delay(WAIT_TIME);
+        digitalWrite(TX_PIN, LOW); // Reset de TX pin
+
+        delay(WAIT_TIME);       // Wacht een vaste tijd
+
+        for (int i = 0; i <= SYNC_STRING.length(); i++)
+        {
+            String tx = String(SYNC_STRING.charAt(i)); // De bit die verstuurd moet worden
+            Serial.println("Verstuurde bit " + String(i) + "= " + tx);
+
+            digitalWrite(TX_PIN, tx == '1');    // "Verstuur" de bit
+            delay(DATA_TIME);                    // Wacht tot we de volgende bit versturen
+        }
+        
+        delay(WAIT_TIME); // Wacht de helft van de wachttijd zodat we de RX zeker ontvangen
+        if (getRX() == HIGH)
+        {
+            delay(WAIT_TIME); // Wacht de andere helft van de tijd
+            inSync = true;
+        }
+        else
+        {
+            delay(2 * WAIT_TIME);
+        }
+    }
+}
+
+///
+/// Deze functie synchroniseert de controllers en ontvangt data
+/// TODO: return enum or list index, ...
+///
+String receiveData()
+{
+    // Eerst synchroniseren we de controllers
+    synchoniseControllersToRead(); 
+
+    Serial.println("Klaar om te ontvangen...");
+    String data = "";
+    for (int i = 0; i < PACKET_SIZE; i++) // We lezen de boodschap, bit voor bit
+    {
+        String rx = String(getRX());
+        data += rx;
+        Serial.println("Ontvangen bit " + String(i) + "= " + rx);
+        delay(DATA_TIME);
+    }
+    Serial.println("Boodschap ontvangen: " + data);
+
+    return data;
+}
+
+///
+/// Deze functie synchroniseert de controllers en verstuurt data
+///
+void sendData(String data)
+{
+    // Eerst synchroniseren we de controllers
+    synchoniseControllersToWrite(); 
+
+    Serial.println("Klaar om te versturen...");
+    for (int i = 0; i < PACKET_SIZE; i++) // We versturen de boodschap, bit voor bit
+    {
+        digitalWrite(TX_PIN, String(data.charAt(i)) == '1');
+        Serial.println("Verstuurde bit " + String(i) + "= " + rx);
+        delay(DATA_TIME);
+    }
+    Serial.println("Boodschap verstuurd: " + data);
+}
+
+void setup() // Loopt alleen bij start
+{
+    memory.add(0); // Initialiseer het spel met een beginwaarde (Dit wordt uiteindelijk de waarde van de ingedrukte startknop)
+
+    // Initialiseer de KNOPPEN en LEDS
+    for (int i = 0; i < 4; i++)
+    {
+        pinMode(KNOPPEN[i], INPUT);
+        if (digitalRead(KNOPPEN[i]) == HIGH)
+        {
+            mijnBeurt = true;
+        }
+    }
+
+    for (int i = 0; i < 4; i++)
+    {
+        pinMode(LEDS[i], OUTPUT);
+    }
+
+    // Initialiseer de status-led outputs
+    pinMode(RGB_PIN[0], OUTPUT);
+    pinMode(RGB_PIN[1], OUTPUT);
+    pinMode(RGB_PIN[2], OUTPUT);
+
+    // Initialiseer de TX/RX pinnen
+    pinMode(TX_PIN, OUTPUT);
+    pinMode(RX_PIN, INPUT);
+
+    // Begin de seriële comunicatie
+    Serial.begin(9600);
+    Serial.println("Begin seriele communicatie...");
 }
 
 void loop()
@@ -213,7 +362,7 @@ void loop()
             /*Serial.println("Status: " + String(digitalRead(KNOPPEN[inputIndex - 1])));
             Serial.println("i: " + String(inputIndex));
             Serial.println("Button: " + String(KNOPPEN[memory.get(inputIndex - 1)]));*/
-            if (buttonDown and inputIndex != 0) // Als er een knop ingedrukt is en het is niet de eerste input van een sequentie (om dubbele detectie te voorkomen)
+            if (buttonDown && inputIndex != 0) // Als er een knop ingedrukt is en het is niet de eerste input van een sequentie (om dubbele detectie te voorkomen)
             {
                 if (digitalRead(KNOPPEN[memory.get(inputIndex - 1)]) == LOW) // Als de vorige correcte knop niet meer ingedrukt is, kunnen we verdergaan
                 {
@@ -244,16 +393,16 @@ void loop()
                     delay(DISPLAY_TIME);        // Wachten
                     setColor(244, 66, 223);     // Zet de led op wit/magenta om te tonen dat de speler een nieuwe knop mag invoeren
                     int knop = addCombinatie(); // Laat de speler een nieuwe knop toevoegen aan de combinatie (en return deze nieuwe knop)
-                    //toonWacht();                // Toon de speler dat het de beurt van de andere speler is en wacht
-                    //mijnBeurt = false;
+                    toonWacht();                // Toon de speler dat het de beurt van de andere speler is en wacht
+                    mijnBeurt = false;
                     inputIndex = 0; // Reset de index
-                    //sendCombinatie(knop); // verstuur de nieuwe knop over de data lijn
+                    sendData(KNOP_DATA[knop]); // verstuur de nieuwe knop over de data lijn
                     break;
                 }
             }
 
             //Serial.println("Huidige tijd: " + String(millis() - inputTime));
-            if (lost or (millis() - inputTime > PLAYER_WAIT_TIME))
+            if (lost || (millis() - inputTime > PLAYER_WAIT_TIME))
             {
                 LoseGame();
                 break;
@@ -266,51 +415,37 @@ void loop()
             LoseGame();
         }
     }
-    /*else
+    else // Het is niet mijn beurt
     {
-        inSync = false;
-
-        while
-            !inSync
-            { // Herhaal dit zolang we niet in sync zijn
-                while
-                    digitalRead(DATA_PIN) == LOW // Wacht tot de pin hoog gestuurd wordt
-                    {
-                        delay(SLEEP_TIME);
-                    }
-
-                while
-                    digitalRead(DATA_PIN) == HIGH // Wacht tot de pin terug laag is om te syncen
-                    {
-                        delay(1);
-                    }
-
-                delay(WAIT_TIME); // Als er HOOG gestuurd wordt, wacht dat tot het terug laag is, en wacht daarna een vaste tijd
-                if
-                    readSyncSequence(DATA_PIN) // Dit checkt of de data die aangekomen is, de "Sync sequentie" is, indien ja, zijn we in sync
-                    {
-                        respondOK(DATA_PIN); // Antwoord OK, de data is in sync
-                        inSync = true;
-                    }
-                else
-                {
-                    respondNOTOK(DATA_PIN); // Antwoord NOT OK en probeer opnieuw te syncen
-                }
-            }
-
-        // We zijn in sync en klaar om de nieuwe memory-eenheid te ontvangen
-        delay(WAIT_TIME);
-        int mem = readMemorySequence(DATA_PIN); // lees de nieuwe memory-eenheid
-        if
-            mem == -1 // we hebben de bit niet juist doorgekregen
-            {
-                respondNOTOK(DATA_PIN); // Antwoord NOT OK en probeer opnieuw te syncen
-                // TODO: Opnieuw syncen
-            }
-        else
+        while (getRX() == LOW) // Wacht tot de pin hoog gestuurd wordt
         {
-            memory.add(mem); // voeg deze toe aan de gekende memory volgorde
+            delay(WAIT_TIME / 2);
         }
+
+        String data = receiveData();
+        if (data == LOST_STATUS) // De andere speler is verloren
+        {
+            while (true) // Flikker de groene led
+            {
+                setColor(0, 255, 0);
+                delay(2 * DISPLAY_TIME);
+                setColor(0, 0, 0);
+                delay(DISPLAY_TIME);
+            }
+        }
+
+        int knop = -1;
+        for (int i = 0; i < 4; i++) // Check welke knop doorgestuurd is
+        {
+            if (data == KNOP_DATA[i])
+            {
+                knop = i;
+                break;
+            }
+        }
+        
+        memory.add(knop); // Reset de variabelen
         mijnBeurt = true;
-    }*/
+        inputIndex = 0;
+    }
 }

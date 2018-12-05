@@ -216,7 +216,7 @@ void synchroniseControllersToRead()
     while (!inSync) // Herhaal dit zolang we niet in sync zijn
     {
         Serial.println("Begin de synchronisatie...");
-        
+
         while (getRX() == HIGH) // Wacht tot de pin terug laag is om te syncen
         {
             delay(1);
@@ -229,6 +229,13 @@ void synchroniseControllersToRead()
             delay(2 * WAIT_TIME);       // Wacht een vaste tijd
             digitalWrite(TX_PIN, LOW);  // Reset de TX pin
             inSync = true;              // We zijn in sync, klaar om te ontvangen
+        }
+
+        delay(WAIT_TIME);
+
+        while (getRX() == LOW) // Wacht tot de pin hoog gestuurd wordt
+        {
+            delay(WAIT_TIME / 2);
         }
     }
 }
@@ -247,17 +254,17 @@ void synchroniseControllersToWrite()
         delay(WAIT_TIME);
         digitalWrite(TX_PIN, LOW); // Reset de TX pin
 
-        delay(WAIT_TIME);       // Wacht een vaste tijd
+        delay(WAIT_TIME); // Wacht een vaste tijd
 
         for (int i = 0; i <= SYNC_STRING.length(); i++)
         {
             String tx = String(SYNC_STRING.charAt(i)); // De bit die verstuurd moet worden
             Serial.println("Verstuurde bit " + String(i) + "= " + tx);
 
-            digitalWrite(TX_PIN, tx == '1');    // "Verstuur" de bit
-            delay(DATA_TIME);                    // Wacht tot we de volgende bit versturen
+            digitalWrite(TX_PIN, tx == '1'); // "Verstuur" de bit
+            delay(DATA_TIME);                // Wacht tot we de volgende bit versturen
         }
-        
+
         delay(WAIT_TIME); // Wacht de helft van de wachttijd zodat we de RX zeker ontvangen
         if (getRX() == HIGH)
         {
@@ -278,7 +285,7 @@ void synchroniseControllersToWrite()
 String receiveData()
 {
     // Eerst synchroniseren we de controllers
-    synchoniseControllersToRead(); 
+    synchoniseControllersToRead();
 
     Serial.println("Klaar om te ontvangen...");
     String data = "";
@@ -300,7 +307,7 @@ String receiveData()
 void sendData(String data)
 {
     // Eerst synchroniseren we de controllers
-    synchoniseControllersToWrite(); 
+    synchoniseControllersToWrite();
 
     Serial.println("Klaar om te versturen...");
     for (int i = 0; i < PACKET_SIZE; i++) // We versturen de boodschap, bit voor bit
@@ -395,7 +402,7 @@ void loop()
                     int knop = addCombinatie(); // Laat de speler een nieuwe knop toevoegen aan de combinatie (en return deze nieuwe knop)
                     toonWacht();                // Toon de speler dat het de beurt van de andere speler is en wacht
                     mijnBeurt = false;
-                    inputIndex = 0; // Reset de index
+                    inputIndex = 0;            // Reset de index
                     sendData(KNOP_DATA[knop]); // verstuur de nieuwe knop over de data lijn
                     break;
                 }
@@ -443,7 +450,7 @@ void loop()
                 break;
             }
         }
-        
+
         memory.add(knop); // Reset de variabelen
         mijnBeurt = true;
         inputIndex = 0;

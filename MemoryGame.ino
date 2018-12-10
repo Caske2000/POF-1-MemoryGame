@@ -4,9 +4,9 @@
 // Pins
 const int KNOPPEN[] = {2, 3, 4, 5}; // Dit zijn de pinnen die verbonden zijn met de KNOPPEN
 const int LEDS[] = {6, 7, 8, 9};    // Dit zijn de pinnen die verbonden zijn met de LEDS
-const int BUZZER_PIN = 10;          // Buzzer pin, geeft speler feedback tijdens het spel
-const int TX_PIN = 2;               // De pin waarover de data verstuurd zal worden
-const int RX_PIN = 3;               // De pin waarover de data ontvangen zal worden
+const int BUZZER_PIN = 13;          // Buzzer pin, geeft speler feedback tijdens het spel
+const int TX_PIN = A0;              // De pin waarover de data verstuurd zal worden
+const int RX_PIN = A1;              // De pin waarover de data ontvangen zal worden
 const int RGB_PIN[] = {10, 11, 12}; // De drie outputs verbonden met de RBG status-led
 
 // Constants
@@ -72,6 +72,14 @@ void flash(int aantal)
 }
 
 ///
+/// Geeft de waarde (1 of 0) van de knop op index 'i' weer
+///
+int digitalReadButton(int index)
+{
+    return digitalRead(KNOPPEN[i]) == HIGH ? LOW : HIGH;
+}
+
+///
 /// Toont de huidige combinatie aan de speler voor hij aan zijn beurt begint.
 ///
 void toonCombinatie()
@@ -111,7 +119,7 @@ int addCombinatie()
                                     // -1 ==> geen knop ingedrukt
         for (int i = 0; i < 4; i++) // Check welke knop(pen) ingedrukt is (zijn)
         {
-            if (digitalRead(KNOPPEN[i]) == HIGH)
+            if (digitalReadButton(i) == HIGH)
             {
                 Serial.println("De nieuwe knop is: " + String(i));
                 if (knop != -1) // Er zijn meerdere knoppen ingedrukt
@@ -150,7 +158,7 @@ int checkMemory()
                                 // -1 ==> geen knop ingedrukt
     for (int i = 0; i < 4; i++) // Check welke knop(pen) ingedrukt is (zijn)
     {
-        if (digitalRead(KNOPPEN[i]) == HIGH)
+        if (digitalReadButton(i) == HIGH)
         {
             if (knop != -1) // Er zijn meerdere knoppen ingedrukt
                 return -1;
@@ -376,8 +384,8 @@ void setup() // Loopt alleen bij start
     // Initialiseer de KNOPPEN en LEDS
     for (int i = 0; i < 4; i++)
     {
-        pinMode(KNOPPEN[i], INPUT);
-        if (digitalRead(KNOPPEN[i]) == HIGH)
+        pinMode(KNOPPEN[i], INPUT_PULLUP);
+        if (digitalReadButton(i) == HIGH)
         {
             mijnBeurt = true;
         }
@@ -395,7 +403,7 @@ void setup() // Loopt alleen bij start
 
     // Initialiseer de TX/RX pinnen
     pinMode(TX_PIN, OUTPUT);
-    pinMode(RX_PIN, INPUT);
+    pinMode(RX_PIN, INPUT_PULLUP);
 
     // Begin de seriële comunicatie
     Serial.begin(9600);
@@ -416,12 +424,12 @@ void loop()
         {
 
             setColor(0, 255, 0); // Zet de status-led naar groen om te tonen dat de speler mag invoeren
-            /*Serial.println("Status: " + String(digitalRead(KNOPPEN[inputIndex - 1])));
+            /*Serial.println("Status: " + String(digitalReadButton(inputIndex - 1)));
             Serial.println("i: " + String(inputIndex));
             Serial.println("Button: " + String(KNOPPEN[memory.get(inputIndex - 1)]));*/
             if (buttonDown && inputIndex != 0) // Als er een knop ingedrukt is en het is niet de eerste input van een sequentie (om dubbele detectie te voorkomen)
             {
-                if (digitalRead(KNOPPEN[memory.get(inputIndex - 1)]) == LOW) // Als de vorige correcte knop niet meer ingedrukt is, kunnen we verdergaan
+                if (digitalReadButton(memory.get(inputIndex - 1)) == LOW) // Als de vorige correcte knop niet meer ingedrukt is, kunnen we verdergaan
                 {
                     buttonDown = false;  // De knop is niet meer ingedrukt
                     setColor(255, 0, 0); // Zet de status-led op rood en wacht even (om dubbele detectie te voorkomen)

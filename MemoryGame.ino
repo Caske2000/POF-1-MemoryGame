@@ -97,15 +97,6 @@ void toonCombinatie()
 }
 
 ///
-/// Toont iets aan de speler zodat hij weet dat het niet zijn beurt is
-/// TODO: WORK IN PROGRESS
-/// Misschien een animatie van de leds die ronddraaien?
-///
-void toonWacht()
-{
-}
-
-///
 /// Voegt een nieuwe knop toe aan de combinatie
 /// Als de speler meerdere knoppen tegelijk indrukt geeft het een foutsignaal en probeert opnieuw
 ///
@@ -346,6 +337,7 @@ void sendData(String data)
 
 ///
 /// Regenboogeffect op de status-led
+/// Toon de speler dat het de beurt van de andere speler is, en wacht
 ///
 void cycleColours()
 {
@@ -458,7 +450,6 @@ void loop()
                     delay(DISPLAY_TIME);        // Wachten
                     setColor(244, 66, 223);     // Zet de led op wit/magenta om te tonen dat de speler een nieuwe knop mag invoeren
                     int knop = addCombinatie(); // Laat de speler een nieuwe knop toevoegen aan de combinatie (en return deze nieuwe knop)
-                    toonWacht();                // Toon de speler dat het de beurt van de andere speler is en wacht
                     mijnBeurt = false;
                     inputIndex = 0;            // Reset de index
                     sendData(KNOP_DATA[knop]); // verstuur de nieuwe knop over de data lijn
